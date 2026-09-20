@@ -1,7 +1,8 @@
 # Slickrock
 
-A Ruby gem that random-walks a web UI in a real browser and shouts when the
-app breaks underneath it.
+A Ruby gem that walks a web UI in a real browser and shouts when the app
+breaks underneath it. **Jev** — TypeSafe's decision model — picks where to
+walk; plain-Ruby oracles decide what counts as broken.
 
 Named for the Slickrock Trail in Moab: an unmarked route where you follow
 painted dots across bare rock and pick your own way. That is the gem — no
@@ -24,8 +25,11 @@ Both are *invisible to assertions someone thought to write*, and both are
 blindingly obvious to anything that clicks the button and then asks "did the
 page break?". Neither needs a model to find. They need a walker and an oracle.
 
-**The thesis: the oracle is the valuable half, and it requires no AI.** The
-model only helps choose *where* to walk.
+**The thesis: the oracle is the valuable half, and it requires no AI.** Jev is
+the other half — it spends the step budget where bugs live, one typed question
+per page, for fractions of a cent per walk (numbers in [Steering](#steering--jev-picks-the-next-click)).
+Without it the walk is uniform random and still finds both bugs above; with it
+it finds them sooner.
 
 ## How it works
 
@@ -36,7 +40,7 @@ snapshot → check invariants → choose an action → perform it → repeat
 - **Snapshot** — url, title, visible text, console messages, interactive controls.
 - **Check** — every oracle runs before acting (and once more after the final
   action). First violation aborts with a full reproduction report.
-- **Choose** — uniform random by default; Jev-weighted when steering is on.
+- **Choose** — Jev ranks the controls and weights the draw; uniform random without it.
 - **Perform** — click it, or fill it.
 
 A failure produces a **seed and a step list** — same seed replays the identical
@@ -124,10 +128,11 @@ shorter than that will trip it. It is configurable.
 Plus app lambdas for domain invariants. Oracles answer `message or nil` —
 they never raise, never fetch, never sleep.
 
-## Steering — optional, and never required
+## Steering — Jev picks the next click
 
-One call per page ranks the controls, so the step budget goes on the cart
-rather than the footer. Key discovery, in order: `api_key:`, then
+One Jev call per page ranks the controls, so the step budget goes on the cart
+rather than the footer. Jev answers a typed question about the page — no
+prompt-and-parse, no free text to sanitise. Key discovery, in order: `api_key:`, then
 `TYPESAFE_API_KEY`, then the `jev` CLI's own store
 (`~/.config/jev-cli/credentials.json`). With no key at all it uses the keyless
 `classifier.dev` endpoint, so steering works out of the box.

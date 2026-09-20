@@ -8,10 +8,12 @@ Gem::Specification.new do |spec|
   spec.authors = [ "cmbaldwin" ]
   spec.email = [ "cody@moab.jp" ]
 
-  spec.summary = "A Ruby gem that random-walks a web UI in a real browser and shouts when the app breaks underneath it."
-  spec.description = "Slickrock drives a real browser through random clicks and checks every page against a set " \
-                      "of oracles, catching the invisible-to-assertions bugs that a scripted test suite walks " \
-                      "right past."
+  spec.summary = "Jev-steered random walks of a web UI in a real browser, with oracles that shout when the app breaks."
+  spec.description = "Slickrock walks a real browser through your app and checks every page against a set of " \
+                      "oracles, catching the invisible-to-assertions bugs a scripted suite walks right past. " \
+                      "Jev, TypeSafe's decision model, ranks the controls on each page so the step budget goes " \
+                      "on the cart instead of the footer — one call per page, billed on input tokens only, and " \
+                      "degrading to uniform random on any failure. Steering is optional; the oracles are not."
   spec.homepage = "https://github.com/cmbaldwin/slickrock"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2"
