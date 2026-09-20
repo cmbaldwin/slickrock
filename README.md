@@ -133,12 +133,32 @@ rather than the footer. Key discovery, in order: `api_key:`, then
 `classifier.dev` endpoint, so steering works out of the box.
 
 ```ruby
-Slickrock.walk(..., steering: Slickrock::Steering::Jev.new)
+steering = Slickrock::Steering::Jev.new
+result = Slickrock.walk(..., steering: steering)
+result.usage   # { calls:, input_tokens:, output_tokens:, request_bytes: }
 ```
 
 **Every failure degrades to uniform random** — bad key, timeout, malformed
 response, no network. A test that fails because a model was unreachable is
 worse than no test.
+
+Jev is billed on **input tokens only** ($0.042 / million; output is free).
+`usage` counts real HTTP calls, not walker steps — a page signature is cached,
+so revisiting the same controls is free. We do not have a local tokeniser;
+these numbers come from the TypeSafe `usage` field on each response.
+
+Measured on Ako Tacos (the first consumer), 2026-09-20: a 20-step cart walk
+during a production deploy, local test server, real Chrome, real Jev API,
+pay/logout on `avoid:`. Finished clean.
+
+| | Ako Tacos, 20-step deploy walk |
+| --- | --- |
+| Calls | 17 |
+| Input tokens | 9,438 |
+| Output tokens | 1,997 (free) |
+| Cost | ~$0.00040 |
+
+About 555 input tokens per call. A thousand deploys like that is about $0.40.
 
 **Steering biases the walk; it does not police it.** The winner gets full
 weight and everything else a fraction, so an unwanted control still gets picked

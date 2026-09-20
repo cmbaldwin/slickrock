@@ -61,6 +61,52 @@ module Slickrock
       assert_equal 1.0, weights["Cart"]
     end
 
+    def test_records_usage_from_the_api_response
+      fake = lambda do |*_args|
+        [ 200, JSON.generate({
+          answers: { next: { type: "choice", choice: "Cart",
+                             probabilities: { "Cart" => 0.9 } } },
+          usage: { input_tokens: 400, output_tokens: 20 }
+        }) ]
+      end
+      steering = Steering::Jev.new(api_key: "test-key", transport: fake)
+      steering.weights(controls, page_signature: "/cart")
+
+      assert_equal 1, steering.usage[:calls]
+      assert_equal 400, steering.usage[:input_tokens]
+      assert_equal 20, steering.usage[:output_tokens]
+      assert_operator steering.usage[:request_bytes], :>, 0
+    end
+
+    def test_cached_page_does_not_count_as_another_call_in_usage
+      calls = 0
+      fake = lambda do |*_args|
+        calls += 1
+        [ 200, JSON.generate({
+          answers: { next: { type: "choice", choice: "Cart",
+                             probabilities: { "Cart" => 0.9 } } },
+          usage: { input_tokens: 100, output_tokens: 5 }
+        }) ]
+      end
+      steering = Steering::Jev.new(api_key: "test-key", transport: fake)
+      2.times { steering.weights(controls, page_signature: "/same") }
+
+      assert_equal 1, calls
+      assert_equal 1, steering.usage[:calls]
+      assert_equal 100, steering.usage[:input_tokens]
+    end
+
+    def test_keyless_path_counts_the_call_even_without_a_usage_field
+      fake = lambda do |*_args|
+        [ 200, JSON.generate({ label: "Cart", confidence: 0.8 }) ]
+      end
+      steering = Steering::Jev.new(api_key: nil, transport: fake)
+      steering.weights(controls, page_signature: "/cart")
+
+      assert_equal 1, steering.usage[:calls]
+      assert_equal 0, steering.usage[:input_tokens]
+    end
+
     def test_results_cached_by_page_signature
       calls = 0
       counting = lambda do |*_args|

@@ -49,7 +49,7 @@ module Slickrock
         return violated(actions_taken, journey, violation) if violation
       end
 
-      Result.new(seed: @seed, steps_taken: actions_taken, journey: journey, violation: nil)
+      build_result(actions_taken, journey, nil)
     end
 
     private
@@ -129,7 +129,24 @@ module Slickrock
         journey: journey,
         screenshot_path: capture_screenshot,
       )
-      Result.new(seed: @seed, steps_taken: actions_taken, journey: journey, violation: violation)
+      build_result(actions_taken, journey, violation)
+    end
+
+    def build_result(actions_taken, journey, violation)
+      Result.new(
+        seed: @seed,
+        steps_taken: actions_taken,
+        journey: journey,
+        violation: violation,
+        usage: steering_usage,
+      )
+    end
+
+    def steering_usage
+      return nil unless @steering.respond_to?(:usage)
+
+      usage = @steering.usage
+      usage.respond_to?(:dup) ? usage.dup : usage
     end
 
     # Tolerates a driver that cannot screenshot at all (SPEC's driver

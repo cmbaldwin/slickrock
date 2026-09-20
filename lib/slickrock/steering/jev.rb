@@ -70,7 +70,11 @@ module Slickrock
         @threshold = threshold
         @transport = transport || method(:post)
         @cache = {}
+        # Real POSTs, not walker steps. Cached pages do not increment this.
+        @usage = { calls: 0, input_tokens: 0, output_tokens: 0, request_bytes: 0 }
       end
+
+      attr_reader :usage
 
       # Weight per control label for this page. Cached by page_signature.
       #
@@ -125,7 +129,7 @@ module Slickrock
                                  type: "choice",
                                  instructions: "Which control should the test walk click next to best pursue this goal?",
                                  criteria: labels.to_h { |label| [ label, label ] } } } })
-        status, raw = @transport.call(SYSTEM_ONE_URL,
+        status, raw = call_transport(SYSTEM_ONE_URL,
                                       { "authorization" => "Bearer #{@api_key}",
                                         "content-type" => "application/json",
                                         "user-agent" => USER_AGENT }, body)
@@ -141,7 +145,7 @@ module Slickrock
         body = JSON.generate({ inputs: [ "#{state[:goal]} on #{state[:page]}" ],
                                labels: labels,
                                instructions: "Which page control should an automated test walk click next?" })
-        status, raw = @transport.call(CLASSIFIER_URL,
+        status, raw = call_transport(CLASSIFIER_URL,
                                       { "content-type" => "application/json",
                                         "user-agent" => USER_AGENT }, body)
         raise "classifier HTTP #{status}" unless status.between?(200, 299)
@@ -149,6 +153,27 @@ module Slickrock
         parsed = JSON.parse(raw)
         res = parsed["results"] ? parsed["results"].first : parsed
         [ res["label"], Float(res["confidence"] || 0) ]
+      end
+
+      def call_transport(url, headers, body)
+        @usage[:calls] += 1
+        @usage[:request_bytes] += body.to_s.bytesize
+        status, raw = @transport.call(url, headers, body)
+        record_token_usage(raw)
+        [ status, raw ]
+      end
+
+      # TypeSafe returns { usage: { input_tokens:, output_tokens: } }.
+      # classifier.dev does not — then we keep calls/bytes and leave tokens at 0.
+      def record_token_usage(raw)
+        parsed = JSON.parse(raw)
+        tokens = parsed["usage"]
+        return unless tokens.is_a?(Hash)
+
+        @usage[:input_tokens] += tokens["input_tokens"].to_i
+        @usage[:output_tokens] += tokens["output_tokens"].to_i
+      rescue JSON::ParserError, TypeError
+        nil
       end
 
       def post(url, headers, body)

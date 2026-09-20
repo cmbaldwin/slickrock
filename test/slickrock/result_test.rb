@@ -15,4 +15,10 @@ class ResultTest < Minitest::Test
 
     refute_predicate result, :ok?
   end
+
+  def test_usage_is_optional
+    result = Slickrock::Result.new(seed: 1, steps_taken: 1, journey: Slickrock::Journey.new, violation: nil)
+
+    assert_nil result.usage
+  end
 end

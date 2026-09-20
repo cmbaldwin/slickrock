@@ -141,4 +141,27 @@ class Slickrock::WalkerTest < Minitest::Test
     assert_equal 5, result.steps_taken
     assert(result.journey.all? { |step| step.action == :click_skipped })
   end
+
+  def test_10_steering_usage_is_copied_onto_the_result
+    steering = Object.new
+    def steering.weights_for(controls, _snapshot)
+      controls.to_h { |control| [ control, 1 ] }
+    end
+    def steering.usage
+      { calls: 3, input_tokens: 900, output_tokens: 40, request_bytes: 1200 }
+    end
+
+    result = Slickrock.walk(
+      start: "/a",
+      driver: Slickrock::Drivers::Fake.new(pages: clean_pages),
+      steps: 2,
+      seed: 1,
+      steering: steering,
+    )
+
+    assert_equal 3, result.usage[:calls]
+    assert_equal 900, result.usage[:input_tokens]
+    result.usage[:calls] = 99
+    assert_equal 3, steering.usage[:calls], "the result must not share the steering hash"
+  end
 end
