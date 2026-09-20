@@ -100,10 +100,16 @@ module Slickrock
       pool.last.first
     end
 
+    # A control that dies between snapshot and click (Turbo re-render,
+    # JS replacement) is harness staleness, not an app violation: record the
+    # skip and walk on. The step budget still decrements, so a page that
+    # churns every control ends the walk instead of looping forever.
     def perform(control, snapshot, journey)
       action = control.kind == :field ? :fill : :click
       action == :fill ? @driver.fill(control, random_value) : @driver.click(control)
-
+    rescue StandardError
+      action = :"#{action}_skipped"
+    ensure
       journey.record(url: snapshot.url, label: control.label, kind: control.kind, action: action)
       @on_step&.call(journey.to_a.last)
     end

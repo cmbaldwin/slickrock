@@ -113,4 +113,19 @@ class Slickrock::WalkerTest < Minitest::Test
       refute(result.journey.any? { |step| step.label == "To B" }, "seed #{seed} clicked a weight-0 control")
     end
   end
+
+  def test_8_stale_control_is_skipped_not_failed
+    driver = Slickrock::Drivers::Fake.new(pages: clean_pages)
+    def driver.click(_control)
+      raise Capybara::Cuprite::ObsoleteNode if defined?(Capybara::Cuprite::ObsoleteNode)
+
+      raise StandardError, "stale test control"
+    end
+
+    result = Slickrock.walk(start: "/a", driver: driver, steps: 5, seed: 9)
+
+    assert_predicate result, :ok?
+    assert_equal 5, result.steps_taken
+    assert(result.journey.all? { |step| step.action == :click_skipped })
+  end
 end
