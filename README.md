@@ -44,32 +44,64 @@ journey. A human decides what earns a permanent deterministic test.
 
 ## Status
 
-Early build (v0.1.0). Landed: value objects (`Control`, `Snapshot`,
-`Journey`, `Result`, `Violation` with reproduction-shaped messages), the
-`Drivers::Fake` scripted page graph, and `Steering::Jev` — keyed direct
-endpoint (`TYPESAFE_API_KEY`) with keyless classifier.dev fallback, uniform
-fallback on any failure, 27 tests green. On the roadmap
-(`docs/PLAN.md`): the `Walker` loop, the five built-in oracles, the Capybara
-driver, and the minitest mixin. First consumer will be
-the Ako Tacos POS Rails app.
+v0.1.0, in build. Landed and tested: the value objects (`Control`, `Snapshot`,
+`Journey`, `Result`, and a `Violation` whose message is a complete reproduction
+report), the `Drivers::Fake` scripted page graph, the five built-in oracles,
+the `Walker` loop, and `Steering::Jev`. Remaining for v0.1: the Capybara
+driver, the Minitest mixin, and CI.
 
-## Quickstart (today — no browser needed)
+First consumer is the Ako Tacos POS Rails app. Build order lives in
+`docs/PLAN.md`.
 
-```ruby
-gem "slickrock", github: "cmbaldwin/slickrock", group: :test
-```
+## Quickstart
 
 ```ruby
-driver = Slickrock::Drivers::Fake.new(pages: {
-  "/cart" => { title: "Cart", text: "2 items",
-               controls: [["Checkout", :link, "/checkout"]],
-               console: [], status: 200 }
-})
-driver.visit("/cart")
-driver.current_url # => "/cart"
+# Gemfile
+group :test do
+  gem "slickrock", github: "cmbaldwin/slickrock"
+end
 ```
 
-## Oracles (roadmap — each its own class, keyword-configured)
+A walk returns a `Result` — it does not raise. Turning a violation into a test
+failure is the caller's job, which keeps the library usable from a deploy
+script that wants to serialise the outcome rather than catch an exception.
+
+```ruby
+result = Slickrock.walk(
+  start:  "/cart",
+  driver: Slickrock::Drivers::Capybara.new(page),
+  steps:  40,
+  avoid:  [ /Pay with/i, /log ?out/i ]   # never clicked, ever
+)
+
+puts result.seed                  # replay handle, printed on every run
+raise result.violation.message unless result.ok?
+```
+
+No browser required to try the loop — `Drivers::Fake` is a scripted page graph,
+and it is what the gem's own suite runs against (in about a millisecond):
+
+```ruby
+Slickrock.walk(
+  start:  "/cart",
+  driver: Slickrock::Drivers::Fake.new(pages: {
+    "/cart"     => { title: "Cart", text: "Your order, with enough text to read",
+                     controls: [["Checkout", :link, "/checkout"]] },
+    "/checkout" => { title: "Checkout", text: "Card details and a pay button",
+                     controls: [["Back to cart", :link, "/cart"]] }
+  }),
+  steps: 10, seed: 42
+)
+```
+
+A page with no controls is a dead end: the walk ends there cleanly, returning
+an ok `Result` with fewer steps than you asked for. That is why `/checkout`
+above has a way back.
+
+Note `NoBlankPage` defaults to 20 characters of visible text — toy fixtures
+shorter than that will trip it. It is configurable.
+
+## Oracles — each its own class, keyword-configured
 
 | Oracle | Catches |
 | --- | --- |
@@ -82,10 +114,28 @@ driver.current_url # => "/cart"
 Plus app lambdas for domain invariants. Oracles answer `message or nil` —
 they never raise, never fetch, never sleep.
 
-## Steering (roadmap — no key required)
+## Steering — optional, and never required
 
-One `classifier.dev` POST over control labels; confidence < 0.6 falls back to
-uniform random; every network error rescues into random with a 5s timeout.
+One call per page ranks the controls, so the step budget goes on the cart
+rather than the footer. Key discovery, in order: `api_key:`, then
+`TYPESAFE_API_KEY`, then the `jev` CLI's own store
+(`~/.config/jev-cli/credentials.json`). With no key at all it uses the keyless
+`classifier.dev` endpoint, so steering works out of the box.
+
+```ruby
+Slickrock.walk(..., steering: Slickrock::Steering::Jev.new)
+```
+
+**Every failure degrades to uniform random** — bad key, timeout, malformed
+response, no network. A test that fails because a model was unreachable is
+worse than no test.
+
+**Steering biases the walk; it does not police it.** The winner gets full
+weight and everything else a fraction, so an unwanted control still gets picked
+eventually — on a nine-control page that is roughly 8% per step, which across a
+twenty-step walk is close to certain. Anything that must *never* be clicked
+belongs in `avoid:`, which is a plain regexp list: deterministic, no network,
+and it cannot be talked out of it by a confident model.
 
 ## What this will not find
 
