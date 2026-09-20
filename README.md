@@ -44,14 +44,10 @@ journey. A human decides what earns a permanent deterministic test.
 
 ## Status
 
-v0.1.0, in build. Landed and tested: the value objects (`Control`, `Snapshot`,
-`Journey`, `Result`, and a `Violation` whose message is a complete reproduction
-report), the `Drivers::Fake` scripted page graph, the five built-in oracles,
-the `Walker` loop, `Steering::Jev`, `Drivers::Capybara`, and the
-`Slickrock::Minitest` mixin. Remaining for v0.1: CI.
-
-First consumer is the Ako Tacos POS Rails app. Build order lives in
-`docs/PLAN.md`.
+v0.1.0, in build. Core is in: value objects, `Drivers::Fake`, the five
+oracles, the `Walker`, `Steering::Jev`, `Drivers::Capybara`, and the
+`Slickrock::Minitest` mixin. First consumer is the Ako Tacos POS Rails app;
+the deploy-time walk (Phase 4) lives there. Build order: `docs/PLAN.md`.
 
 ## Quickstart
 

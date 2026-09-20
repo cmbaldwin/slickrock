@@ -19,7 +19,7 @@ Gem::Specification.new do |spec|
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
 
-  spec.files = Dir.glob("lib/**/*.rb") + %w[slickrock.gemspec Gemfile Rakefile .rubocop.yml]
+  spec.files = Dir.glob("lib/**/*.rb") + %w[slickrock.gemspec Gemfile Rakefile .rubocop.yml README.md LICENSE CHANGELOG.md]
   spec.require_paths = [ "lib" ]
 
   spec.add_development_dependency "capybara"
