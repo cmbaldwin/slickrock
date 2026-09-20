@@ -45,10 +45,12 @@ journey. A human decides what earns a permanent deterministic test.
 ## Status
 
 Early build (v0.1.0). Landed: value objects (`Control`, `Snapshot`,
-`Journey`, `Result`, `Violation` with reproduction-shaped messages) and the
-`Drivers::Fake` scripted page graph, 20 tests green. On the roadmap
+`Journey`, `Result`, `Violation` with reproduction-shaped messages), the
+`Drivers::Fake` scripted page graph, and `Steering::Jev` — keyed direct
+endpoint (`TYPESAFE_API_KEY`) with keyless classifier.dev fallback, uniform
+fallback on any failure, 27 tests green. On the roadmap
 (`docs/PLAN.md`): the `Walker` loop, the five built-in oracles, the Capybara
-driver, keyless Jev steering, and the minitest mixin. First consumer will be
+driver, and the minitest mixin. First consumer will be
 the Ako Tacos POS Rails app.
 
 ## Quickstart (today — no browser needed)

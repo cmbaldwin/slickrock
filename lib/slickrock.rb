@@ -14,6 +14,7 @@ require_relative "slickrock/oracles/no_js_error"
 require_relative "slickrock/oracles/no_blank_page"
 require_relative "slickrock/oracle"
 require_relative "slickrock/walker"
+require_relative "slickrock/steering/jev"
 
 # A gem that random-walks a web UI in a real browser and shouts when the app
 # breaks underneath it. See docs/SPEC.md for the design.
