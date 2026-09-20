@@ -115,9 +115,50 @@ find" section.
 GitHub Actions running `rake test` and `rubocop` on push and PR, Ruby 3.2/3.3/3.4.
 `CHANGELOG.md`. MIT `LICENSE`.
 
-## Wiring it into akotacos (separate, after v0.1 tags)
+## Phase 4 — ride the deploy (in akotacos, after v0.1 tags)
 
-`gem "slickrock", github: "cmbaldwin/slickrock", group: :test`, and one
+`gem "slickrock", github: "cmbaldwin/slickrock", group: :test`, plus one
 `test/system/cart_fuzz_test.rb` that is **not** part of `bin/pre-deploy` — the
 browser suite already fails 1 run in 3, and a randomised test must never gate a
 deploy.
+
+Beyond running it by hand, it rides the deploy: a deploy already spends 60-250
+seconds building, pushing and swapping containers, and a walk fits inside that
+for free.
+
+```
+pre-build   gate passes → spawn a DETACHED walk → write pid + log + result.json
+   ↓                                    (deploy carries on immediately)
+build / push / swap                     ← walk runs in parallel
+   ↓
+post-deploy fetch the result → print it → deploy exits 0 either way
+```
+
+**4.1 `bin/slickrock-async`** — `start` spawns a detached walk and returns at
+once; `report` collects it. Artefacts under `tmp/slickrock/<git-sha>/`:
+`walk.log`, `result.json` (seed, steps, violation, screenshot), `pid`.
+
+**4.2 Hook wiring** — `pre-build` calls `start` *after* the gate passes, so a
+failed gate never leaves an orphan. `post-deploy` calls `report`.
+
+**4.3 The report** — prints seed, steps taken, pages visited, and the violation
+with its reproduction line. Written to be read by a human *and* pasted to an
+agent summarising the deploy, so it must be self-contained: an agent seeing only
+that block should be able to act on it.
+
+### Rules this phase must not break
+
+- **It runs against a locally booted test server on the test database. Never
+  production.** A random walker in production creates real orders and moves real
+  money. The classifier is not a safety boundary — measured on the real cart,
+  "Pay with cash at counter" classified as *completes a purchase* at only 0.77
+  confidence. Good enough to steer a walk; nowhere near good enough to protect
+  production. `bin/slickrock-async` must refuse to target any host that is not
+  localhost.
+- **It never fails a deploy.** `start` and `report` exit 0 on every internal
+  error. A violation is reported loudly and changes no exit code. The deploy's
+  correctness gate is `bin/pre-deploy`; this is intelligence, not a gate.
+- **No orphans.** `report` kills a walk that outlived the deploy; `start`
+  reaps a stale pid from a previous run before spawning.
+- **Silent when absent.** If the gem is missing or the walk cannot start, print
+  one line and carry on.
