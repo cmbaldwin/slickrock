@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "tmpdir"
+require "json"
 
 module Slickrock
   class SteeringJevTest < Minitest::Test
@@ -82,6 +84,63 @@ module Slickrock
       steering = Steering::Jev.new
       weights = steering.weights(controls, page_signature: "live smoke page")
       assert_equal %w[Cart Checkout Logout].sort, weights.keys.sort
+    end
+
+    # Someone who ran `jev auth set` expects the gem to work without also
+    # exporting TYPESAFE_API_KEY. The silent alternative is using the keyless
+    # endpoint while believing the official one is in play.
+    def test_discover_key_prefers_the_env_var
+      with_env("TYPESAFE_API_KEY", "from-env") do
+        assert_equal "from-env", Slickrock::Steering::Jev.discover_key
+      end
+    end
+    def test_discover_key_falls_back_to_the_cli_credential_store
+      with_env("TYPESAFE_API_KEY", nil) do
+        Dir.mktmpdir do |dir|
+          path = File.join(dir, "credentials.json")
+          File.write(path, JSON.generate({ providers: { official: "from-store" } }))
+          with_credentials_path(path) do
+            assert_equal "from-store", Slickrock::Steering::Jev.discover_key
+          end
+        end
+      end
+    end
+    def test_a_malformed_credential_store_means_no_key_not_a_crash
+      with_env("TYPESAFE_API_KEY", nil) do
+        Dir.mktmpdir do |dir|
+          path = File.join(dir, "credentials.json")
+          File.write(path, "{ this is not json")
+          with_credentials_path(path) do
+            assert_nil Slickrock::Steering::Jev.discover_key
+          end
+        end
+      end
+    end
+    def test_a_missing_credential_store_means_no_key
+      with_env("TYPESAFE_API_KEY", nil) do
+        with_credentials_path("/nope/does/not/exist.json") do
+          assert_nil Slickrock::Steering::Jev.discover_key
+        end
+      end
+    end
+    private
+    def with_credentials_path(path)
+      klass = Slickrock::Steering::Jev
+      previous = klass::CLI_CREDENTIALS
+      klass.send(:remove_const, :CLI_CREDENTIALS)
+      klass.const_set(:CLI_CREDENTIALS, path)
+      yield
+    ensure
+      klass.send(:remove_const, :CLI_CREDENTIALS)
+      klass.const_set(:CLI_CREDENTIALS, previous)
+    end
+    def with_env(name, value)
+      had = ENV.key?(name)
+      previous = ENV[name]
+      value.nil? ? ENV.delete(name) : ENV[name] = value
+      yield
+    ensure
+      had ? ENV[name] = previous : ENV.delete(name)
     end
   end
 end

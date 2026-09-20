@@ -13,10 +13,20 @@ module Slickrock
     # toward the controls that look useful, while the oracles — not the model —
     # decide what counts as broken.
     #
-    # Key comes from `TYPESAFE_API_KEY` (or `api_key:`). With no key it uses
-    # the keyless classifier.dev endpoint instead, so steering works out of
-    # the box. Every network error degrades to uniform weights — steering
-    # must never break a walk.
+    # Key discovery, in order: `api_key:`, then `TYPESAFE_API_KEY`, then the
+    # `jev` CLI's own credential store. With no key at all it uses the keyless
+    # classifier.dev endpoint, so steering works out of the box.
+    #
+    # Every network error degrades to uniform weights — steering must never
+    # break a walk. A test that fails because a model was unreachable is worse
+    # than no test.
+    #
+    # NOTE: this biases the walk, it does not police it. The winner gets 1.0
+    # and everything else DEFAULT_WEIGHT, so on a page of N controls any single
+    # non-winner still has roughly `DEFAULT_WEIGHT / (1 + DEFAULT_WEIGHT*(N-1))`
+    # chance per step — over a long walk that is close to certain. If a control
+    # must never be clicked (checkout, log out, delete), put it in the walker's
+    # `avoid:` regexp list. That is deterministic and needs no network.
     class Jev
       SYSTEM_ONE_URL = "https://api.typesafe.ai/v1/systemone"
       CLASSIFIER_URL = "https://classifier.dev"
@@ -26,11 +36,33 @@ module Slickrock
       DEFAULT_WEIGHT = 0.25
       TIMEOUT = 5
 
+      # Where the `jev` CLI keeps its key. Read as a FALLBACK after the env var,
+      # because someone who ran `jev auth set` reasonably expects the gem to
+      # work without also exporting TYPESAFE_API_KEY — and the silent
+      # alternative is falling back to the keyless endpoint while believing the
+      # official one is in use.
+      CLI_CREDENTIALS = File.join(Dir.home, ".config", "jev-cli", "credentials.json")
+
+      # Env var first, then the CLI's credential store, then nil (keyless).
+      # Any read error means "no key", never a raise: a missing or malformed
+      # credentials file must not stop a walk.
+      def self.discover_key
+        ENV.fetch("TYPESAFE_API_KEY", nil) || stored_key
+      end
+
+      def self.stored_key
+        return nil unless File.readable?(CLI_CREDENTIALS)
+
+        JSON.parse(File.read(CLI_CREDENTIALS)).dig("providers", "official")
+      rescue StandardError
+        nil
+      end
+
       # @param api_key [String, nil] TypeSafe key; nil falls back to classifier.dev
       # @param threshold [Float] confidence below this means "use default weight"
       # @param transport [Proc, nil] (url, headers, body) -> [status, body];
       #   the default uses net/http. Inject a fake in tests.
-      def initialize(api_key: ENV.fetch("TYPESAFE_API_KEY", nil),
+      def initialize(api_key: Jev.discover_key,
                      model: DEFAULT_MODEL, threshold: DEFAULT_THRESHOLD,
                      transport: nil)
         @api_key = api_key
