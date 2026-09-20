@@ -132,10 +132,7 @@ they never raise, never fetch, never sleep.
 
 One Jev call per page ranks the controls, so the step budget goes on the cart
 rather than the footer. Jev answers a typed question about the page — no
-prompt-and-parse, no free text to sanitise. Key discovery, in order: `api_key:`, then
-`TYPESAFE_API_KEY`, then the `jev` CLI's own store
-(`~/.config/jev-cli/credentials.json`). With no key at all it uses the keyless
-`classifier.dev` endpoint, so steering works out of the box.
+prompt-and-parse, no free text to sanitise.
 
 ```ruby
 steering = Slickrock::Steering::Jev.new
@@ -146,6 +143,28 @@ result.usage   # { calls:, input_tokens:, output_tokens:, request_bytes: }
 **Every failure degrades to uniform random** — bad key, timeout, malformed
 response, no network. A test that fails because a model was unreachable is
 worse than no test.
+
+### Getting a key
+
+A key is optional — with none, steering falls back to the keyless
+`classifier.dev` endpoint and works out of the box. It is unauthenticated and
+carries no rate or availability guarantee, so treat it as best-effort — fine for
+trying the gem, and for a walk that runs on every deploy use a real key from
+[console.typesafe.ai/keys](https://console.typesafe.ai/keys).
+
+Slickrock looks for one in three places, in order:
+
+```ruby
+Slickrock::Steering::Jev.new(api_key: ENV["MY_KEY"])   # 1. explicit
+```
+```bash
+export TYPESAFE_API_KEY=...                             # 2. environment
+jev auth set                                            # 3. the jev CLI's store
+```
+
+Option 3 reads `~/.config/jev-cli/credentials.json`, so if you already use the
+`jev` CLI there is nothing else to configure. Never commit the key; a malformed
+or unreadable credentials file is treated as "no key", never as an error.
 
 Jev is billed on **input tokens only** ($0.042 / million; output is free).
 `usage` counts real HTTP calls, not walker steps — a page signature is cached,
