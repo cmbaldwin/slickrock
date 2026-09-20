@@ -137,10 +137,20 @@ not 40.
 Every walk is driven by `Random.new(seed)` and prints its seed on start and on
 failure. `Journey` records each step (`url`, `label`, `kind`, `action`).
 
-A violation raises `Slickrock::Violation` carrying seed, step index, the
-journey, and a screenshot path. Re-running with the same seed replays the same
-walk, **provided the app starts in the same state** — which is a caveat the
-report states plainly rather than pretending determinism it cannot guarantee.
+A violation is **returned, not raised**: `Slickrock.walk` always hands back a
+`Result`, and `Result#violation` carries the seed, step index, journey and
+screenshot path. Turning that into a failure is the caller's job —
+`Slickrock::Minitest` raises, the deploy runner serialises it to JSON.
+
+That split matters. A library that raises forces every caller into
+`begin/rescue` to do anything other than fail, and the deploy integration
+(Phase 4) wants the result as data, not as an exception it has to catch and
+re-encode.
+
+Re-running with the same seed replays the same walk, **provided the app starts
+in the same state** — a caveat the report states plainly rather than pretending
+determinism it cannot guarantee. Different seeds genuinely diverge: measured on
+a 3-page graph, 10 seeds produced 10 distinct journeys.
 
 ## Public API
 
