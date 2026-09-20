@@ -138,8 +138,9 @@ module Slickrock
     # violation report over it.
     def capture_screenshot
       path = File.join(Dir.tmpdir, "slickrock-#{@seed}-#{Time.now.to_f}-#{@rng.rand(9999)}.png")
-      @driver.screenshot(path)
-      path
+      saved = @driver.screenshot(path)
+      return saved if saved
+      File.exist?(path) ? path : nil
     rescue StandardError
       nil
     end

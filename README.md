@@ -47,8 +47,8 @@ journey. A human decides what earns a permanent deterministic test.
 v0.1.0, in build. Landed and tested: the value objects (`Control`, `Snapshot`,
 `Journey`, `Result`, and a `Violation` whose message is a complete reproduction
 report), the `Drivers::Fake` scripted page graph, the five built-in oracles,
-the `Walker` loop, and `Steering::Jev`. Remaining for v0.1: the Capybara
-driver, the Minitest mixin, and CI.
+the `Walker` loop, `Steering::Jev`, `Drivers::Capybara`, and the
+`Slickrock::Minitest` mixin. Remaining for v0.1: CI.
 
 First consumer is the Ako Tacos POS Rails app. Build order lives in
 `docs/PLAN.md`.
@@ -76,6 +76,20 @@ result = Slickrock.walk(
 
 puts result.seed                  # replay handle, printed on every run
 raise result.violation.message unless result.ok?
+```
+
+From a system test the mixin is one line. A walk returns a `Result` rather
+than raising, so the mixin is the thing that turns a violation into a
+failure — a deploy script can serialise the same result instead.
+
+```ruby
+class CartFuzzTest < ApplicationSystemTestCase
+  include Slickrock::Minitest
+
+  test "the cart survives a random walk" do
+    slickrock_walk cart_path, steps: 40, avoid: [ /Pay with/i, /log ?out/i ]
+  end
+end
 ```
 
 No browser required to try the loop — `Drivers::Fake` is a scripted page graph,

@@ -5,7 +5,10 @@ require "tmpdir"
 require "json"
 
 module Slickrock
-  class SteeringJevTest < Minitest::Test
+  # ::Minitest::Test, not Minitest::Test -- inside `module Slickrock`, a bare
+  # `Minitest` constant now resolves to Slickrock::Minitest (the 2.3 mixin)
+  # before it reaches the top-level minitest gem.
+  class SteeringJevTest < ::Minitest::Test
     LABELS = %w[Checkout Cart Logout].freeze
 
     def controls

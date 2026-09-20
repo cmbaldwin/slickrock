@@ -10,14 +10,19 @@ module Slickrock
     # but ignores frames and disables forgery protection — the exact blind
     # spots behind the two production bugs in docs/SPEC.md — so console
     # oracles only bite under a JS driver. Both modes share this interface.
+    #
+    # Capybara is never required here. The session is duck-typed, so the gem
+    # still loads when a consumer hasn't installed Capybara at all.
     class Capybara
-      # @param session [#visit #current_url #title ...] a Capybara::Session
+      CONTROL_SELECTOR = "button, a[href], input[type=submit], select, input:not([type=hidden])"
+
       def initialize(session)
         @session = session
       end
 
       def visit(url)
         @session.visit(url)
+        nil
       end
 
       def current_url
@@ -32,20 +37,13 @@ module Slickrock
         @session.text.to_s
       end
 
-      # Visible, enabled controls labelled best-effort. Label sources in
-      # order: visible text, aria-label, value, placeholder, name. Unlabelled
-      # controls are skipped — the walker cannot report them usefully.
+      # Re-queried every call, never cached — see SPEC.md "Controls are
+      # re-read every step." Visible + enabled only. Label order from
+      # SPEC.md 2.1: visible text -> aria-label -> value -> placeholder ->
+      # name. Never blank — an unlabelled control still needs a string a
+      # human can read in a failure report.
       def controls
-        @session.all("button, a[href], input[type=submit], select, input:not([type=hidden])",
-                     visible: true).filter_map do |node|
-          next unless enabled?(node)
-
-          label = label_for(node)
-          next if label.nil? || label.empty?
-
-          kind = control_kind(node)
-          Control.new(ref: node, label: label, kind: kind, enabled: true)
-        end
+        @session.all(:css, CONTROL_SELECTOR, visible: true).filter_map { |node| build_control(node) }
       end
 
       def click(control)
@@ -56,57 +54,68 @@ module Slickrock
         control.ref.set(value)
       end
 
-      # Browser console entries since the last call, or [] when the driver
-      # cannot provide them (rack_test). Never raises: a missing log API is
-      # a degraded oracle, not a walk failure.
+      # Selenium exposes `browser.logs`; rack_test has no such thing. A
+      # missing log API is a degraded oracle, not a walk failure.
       def console_messages
-        browser = @session.driver.browser
-        logs = browser.logs.get(:browser)
-        Array(logs).map { |entry| { level: entry.level.to_s, text: entry.message.to_s } }
+        @session.driver.browser.logs.get(:browser).map do |entry|
+          { level: entry.level.to_s.downcase, text: entry.message.to_s }
+        end
       rescue StandardError
         []
       end
 
+      # Selenium can save a PNG; rack_test cannot render anything. Same
+      # rule as console_messages: absence of the feature is not an error.
       def screenshot(path)
         @session.save_screenshot(path)
+        path
+      rescue StandardError
+        nil
       end
 
       private
 
-      def enabled?(node)
-        !node.disabled?
+      def build_control(node)
+        return nil if node.disabled?
+
+        Control.new(
+          ref: node,
+          label: label_for(node),
+          kind: kind_for(node),
+          enabled: true,
+          meta: {},
+        )
       rescue StandardError
-        false
+        nil
       end
 
       def label_for(node)
-        text = node.text.to_s.strip
-        return text unless text.empty?
-
-        %w[aria-label value placeholder name title].each do |attr|
-          value = node[attr].to_s.strip
-          return value unless value.empty?
-        end
-        nil
-      rescue StandardError
-        nil
+        [ node.text, node[:"aria-label"], node[:value], node[:placeholder], node[:name], node[:title] ]
+          .map { |candidate| candidate.to_s.strip }
+          .find { |candidate| !candidate.empty? } || fallback_label(node)
       end
 
-      def control_kind(node)
+      def fallback_label(node)
+        "#{node.tag_name}##{node[:id] || node[:type] || "?"}"
+      end
+
+      def kind_for(node)
         case node.tag_name
         when "a" then :link
         when "select" then :select
-        when "input"
-          case node[:type]
-          when "checkbox" then :checkbox
-          when "radio" then :radio
-          else :field
-          end
         when "button" then :button
-        else :button
+        when "input" then kind_for_input(node)
+        else :field
         end
-      rescue StandardError
-        :button
+      end
+
+      def kind_for_input(node)
+        case node[:type].to_s.downcase
+        when "submit" then :button
+        when "checkbox" then :checkbox
+        when "radio" then :radio
+        else :field
+        end
       end
     end
   end

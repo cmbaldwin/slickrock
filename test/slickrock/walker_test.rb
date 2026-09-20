@@ -100,7 +100,20 @@ class Slickrock::WalkerTest < Minitest::Test
     assert_match(/server error page/, result.violation.reason)
   end
 
-  def test_7_steering_weight_of_zero_is_never_chosen
+  def test_7_a_driver_that_cannot_screenshot_does_not_invent_a_path
+    pages = { "/a" => { title: "Internal Server Error", text: "We're sorry, but something went wrong.",
+                        controls: [], console: [] } }
+    driver = Slickrock::Drivers::Fake.new(pages: pages)
+    driver.define_singleton_method(:screenshot) { |_path| nil }
+
+    result = Slickrock.walk(start: "/a", driver: driver, steps: 1, seed: 1)
+
+    refute_predicate result, :ok?
+    assert_nil result.violation.screenshot_path
+    refute_match(/Screenshot:/, result.violation.message)
+  end
+
+  def test_8_steering_weight_of_zero_is_never_chosen
     steering = Object.new
     def steering.weights_for(controls, _snapshot)
       controls.to_h { |control| [ control, control.label == "To B" ? 0 : 1 ] }
@@ -114,7 +127,7 @@ class Slickrock::WalkerTest < Minitest::Test
     end
   end
 
-  def test_8_stale_control_is_skipped_not_failed
+  def test_9_stale_control_is_skipped_not_failed
     driver = Slickrock::Drivers::Fake.new(pages: clean_pages)
     def driver.click(_control)
       raise Capybara::Cuprite::ObsoleteNode if defined?(Capybara::Cuprite::ObsoleteNode)

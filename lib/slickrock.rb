@@ -21,3 +21,12 @@ require_relative "slickrock/steering/jev"
 # breaks underneath it. See docs/SPEC.md for the design.
 module Slickrock
 end
+
+# The mixin does not require the minitest gem (it uses `assert` from the
+# including test class). Guarded so a missing file cannot take the whole
+# gem down for a consumer who never includes it.
+begin
+  require_relative "slickrock/minitest"
+rescue LoadError
+  nil
+end
