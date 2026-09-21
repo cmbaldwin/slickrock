@@ -15,10 +15,12 @@ module Slickrock
       LABELS.map { |label| Control.new(ref: label, label: label, kind: :link, enabled: true) }
     end
 
-    def direct_ok(choice, prob)
+    def direct_ok(choice, prob, enough: 0.95)
       lambda do |_url, _headers, _body|
-        [ 200, JSON.generate({ answers: { next: { type: "choice", choice: choice,
-                                                 probabilities: { choice => prob } } } }) ]
+        [ 200, JSON.generate({ answers: {
+          enough: { type: "noul", noul: enough },
+          next: { type: "choice", choice: choice, probabilities: { choice => prob } }
+        } }) ]
       end
     end
 
@@ -33,6 +35,30 @@ module Slickrock
       steering = Steering::Jev.new(api_key: "test-key", transport: direct_ok("Checkout", 0.4))
       weights = steering.weights(controls, page_signature: "/cart")
       assert_equal({ "Checkout" => 0.25, "Cart" => 0.25, "Logout" => 0.25 }, weights)
+    end
+
+    def test_not_enough_context_falls_back_even_when_choice_is_confident
+      steering = Steering::Jev.new(api_key: "test-key",
+                                   transport: direct_ok("Checkout", 0.99, enough: 0.2))
+      weights = steering.weights(controls, page_signature: "/cart")
+      assert_equal({ "Checkout" => 0.25, "Cart" => 0.25, "Logout" => 0.25 }, weights)
+    end
+
+    def test_direct_request_asks_enough_noul_before_choice
+      seen = {}
+      fake = lambda do |_url, _headers, body|
+        seen[:body] = JSON.parse(body)
+        [ 200, JSON.generate({ answers: {
+          enough: { type: "noul", noul: 0.9 },
+          next: { type: "choice", choice: "Cart", probabilities: { "Cart" => 0.9 } }
+        } }) ]
+      end
+      Steering::Jev.new(api_key: "test-key", transport: fake)
+                   .weights(controls, page_signature: "/cart")
+      questions = seen[:body]["questions"]
+      assert_equal "noul", questions["enough"]["type"]
+      assert_equal "choice", questions["next"]["type"]
+      assert_equal %w[controls goal page], seen[:body]["state"].keys.sort
     end
 
     def test_network_failure_falls_back_to_uniform_without_raising

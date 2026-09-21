@@ -140,11 +140,17 @@ not 40.
   (the control labels + page signature), and the question must point at one of
   them. An underdetermined referent makes Jev guess from priors — that looks
   like malfunction and isn't.
+- **Enough-context first.** The keyed call always asks a Noul (`enough`: is
+  `controls` + `page` enough to pick a next click toward `goal`?) alongside
+  the Choice (`next`). Code consumes `next` only when `enough` clears the
+  threshold; otherwise default weights. Jev is not sound if the real question
+  is asked against an underdetermined referent.
 - **Sufficient positive criteria.** Instructions state what counts as enough,
-  concretely ("worth clicking toward checkout"), never only what doesn't.
-- **Probability gates, calibrated.** Below-threshold confidence falls back to
-  the default weight; near-ties are never consumed as decisions. Thresholds
-  are starting defaults until measured on labelled examples.
+  concretely ("a specific control is clearly worth clicking toward the goal"),
+  never only what doesn't.
+- **Probability gates, calibrated.** Below-threshold Noul or Choice confidence
+  falls back to the default weight; near-ties are never consumed as decisions.
+  Thresholds are starting defaults until measured on labelled examples.
 - **Fail-open always.** Any error → uniform random, walk continues.
 
 ### 4. Journey — reproducibility

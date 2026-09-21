@@ -64,11 +64,12 @@ module Slickrock
       #   the default uses net/http. Inject a fake in tests.
       def initialize(api_key: Jev.discover_key,
                      model: DEFAULT_MODEL, threshold: DEFAULT_THRESHOLD,
-                     transport: nil)
+                     transport: nil, goal: "find anything broken")
         @api_key = api_key
         @model = model
         @threshold = threshold
         @transport = transport || method(:post)
+        @goal = goal
         @cache = {}
         # Real POSTs, not walker steps. Cached pages do not increment this.
         @usage = { calls: 0, input_tokens: 0, output_tokens: 0, request_bytes: 0 }
@@ -82,7 +83,7 @@ module Slickrock
       # @param page_signature [String] url + control labels; same page, same answer
       # @param goal [String] what the walk is trying to reach, in plain words
       # @return [Hash{String => Float}] label => weight (uniform on any failure)
-      def weights(controls, page_signature:, goal: "find anything broken")
+      def weights(controls, page_signature:, goal: @goal)
         labels = controls.map(&:label).uniq.first(100)
         return uniform(labels) if labels.empty?
 
@@ -93,7 +94,7 @@ module Slickrock
       # uniform default of 1 for anything left out.
       #
       # @param goal [String] what the walk is trying to reach
-      def weights_for(candidates, snapshot, goal: "find anything broken")
+      def weights_for(candidates, snapshot, goal: @goal)
         url = snapshot.respond_to?(:url) ? snapshot.url.to_s : snapshot.to_s
         sig = "#{url}|#{candidates.map(&:label).join(",")}"
         by_label = weights(candidates, page_signature: sig, goal: goal)
@@ -111,7 +112,7 @@ module Slickrock
       end
 
       def judge(labels, signature, goal)
-        state = { page: signature, goal: goal }
+        state = { goal: goal, page: signature, controls: labels }
         winner, confidence = @api_key ? ask_direct(state, labels) : ask_keyless(state, labels)
         return defaulted(labels) unless winner && labels.include?(winner)
         return defaulted(labels) unless confidence >= @threshold
@@ -124,18 +125,39 @@ module Slickrock
       end
 
       def ask_direct(state, labels)
-        body = JSON.generate({ model: @model, state: state,
-                               questions: { next: {
-                                 type: "choice",
-                                 instructions: "Which control should the test walk click next to best pursue this goal?",
-                                 criteria: labels.to_h { |label| [ label, label ] } } } })
+        body = JSON.generate({
+          model: @model,
+          state: state,
+          questions: {
+            # Jev is only sound if the first question is whether the state is
+            # enough to answer the real one. Both run in one request; code
+            # consumes `next` only when `enough` clears the threshold.
+            enough: {
+              type: "noul",
+              instructions: "Is `controls` together with `page` enough context to pick which control best pursues `goal`?",
+              criteria: {
+                true: "A specific control is clearly worth clicking toward the goal",
+                false: "The labels and page are too thin or ambiguous to prefer one control"
+              }
+            },
+            next: {
+              type: "choice",
+              instructions: "Which control in `controls` should the test walk click next to best pursue `goal`?",
+              criteria: labels.to_h { |label| [ label, label ] }
+            }
+          }
+        })
         status, raw = call_transport(SYSTEM_ONE_URL,
                                       { "authorization" => "Bearer #{@api_key}",
                                         "content-type" => "application/json",
                                         "user-agent" => USER_AGENT }, body)
         raise "Jev HTTP #{status}" unless status.between?(200, 299)
 
-        answer = JSON.parse(raw).fetch("answers").fetch("next")
+        answers = JSON.parse(raw).fetch("answers")
+        enough = answers.dig("enough", "noul")
+        return [ nil, 0 ] if enough && Float(enough) < @threshold
+
+        answer = answers.fetch("next")
         choice = answer["choice"]
         conf = answer["probabilities"]&.fetch(choice, 0) || 0
         [ choice, Float(conf) ]

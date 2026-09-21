@@ -146,8 +146,10 @@ worse than no test.
 
 **Programming rules** (SPEC §3 has the full version): keyed direct endpoint
 first with keyless fallback; the state names exactly what the question judges;
-instructions state what counts as *enough*, positively; below-threshold
-confidence falls back, never decides.
+the first question is a Noul — is there enough context to answer — and the
+Choice is consumed only when that clears the threshold; instructions state
+what counts as *enough*, positively; below-threshold confidence falls back,
+never decides.
 
 ### Getting a key
 
