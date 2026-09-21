@@ -132,6 +132,21 @@ continues. A test that fails because a classifier was down is worthless.
 Labels are cached per page-signature so a 40-step walk is a handful of calls,
 not 40.
 
+#### Programming rules (all Jev calls in this gem obey these)
+
+- **Keyed direct first, keyless fallback.** `TYPESAFE_API_KEY` → System One
+  endpoint; without it, classifier.dev. Both answer the same typed questions.
+- **Referent alignment.** The state must name exactly what the question judges
+  (the control labels + page signature), and the question must point at one of
+  them. An underdetermined referent makes Jev guess from priors — that looks
+  like malfunction and isn't.
+- **Sufficient positive criteria.** Instructions state what counts as enough,
+  concretely ("worth clicking toward checkout"), never only what doesn't.
+- **Probability gates, calibrated.** Below-threshold confidence falls back to
+  the default weight; near-ties are never consumed as decisions. Thresholds
+  are starting defaults until measured on labelled examples.
+- **Fail-open always.** Any error → uniform random, walk continues.
+
 ### 4. Journey — reproducibility
 
 Every walk is driven by `Random.new(seed)` and prints its seed on start and on

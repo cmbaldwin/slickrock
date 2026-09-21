@@ -144,6 +144,11 @@ result.usage   # { calls:, input_tokens:, output_tokens:, request_bytes: }
 response, no network. A test that fails because a model was unreachable is
 worse than no test.
 
+**Programming rules** (SPEC §3 has the full version): keyed direct endpoint
+first with keyless fallback; the state names exactly what the question judges;
+instructions state what counts as *enough*, positively; below-threshold
+confidence falls back, never decides.
+
 ### Getting a key
 
 A key is optional — with none, steering falls back to the keyless
